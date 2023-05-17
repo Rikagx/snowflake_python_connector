@@ -132,4 +132,53 @@ ctx = snowflake.connector.connect(
 cs = ctx.cursor()
 
 
+# third way of doing it lol
+#!pip install snowflake-connector-python
+
+import os
+import snowflake.connector
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+import pandas as pd
+import numpy as np
+
+
+# Set environment variables
+os.environ['SNOWFLAKE_UID'] = 'emily.hembacher@betterup.co'
+
+#Get private key
+with open("../rsa_key.p8", "rb") as key:
+    p_key= serialization.load_pem_private_key(
+        key.read(),
+        password=None,
+        backend=default_backend()
+    )
+
+pkb = p_key.private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption())
+
+_connection = None
+def get_snowflake_connection(*, database=None, schema=None):
+    """
+    Returns a snowflake connection using the env_vars passed with the option of override for db and schema.
+    """
+    global _connection  # pylint:disable=W0603
+    if not _connection:
+        _connection = snowflake.connector.connect(
+            user=os.environ.get('SNOWFLAKE_UID'),
+            private_key=pkb,
+            account=os.environ.get('account', 'oj02423.us-east-1'),
+            role=os.environ.get('role', 'TRANSFORMER'),
+            database=database if database else os.environ.get('SNOWFLAKE_DATABASE', "ANALYTICS"),
+            schema=schema if schema else os.environ.get('SNOWFLAKE_SCHEMA', "ANALYTICS"),
+            client_session_keep_alive=True,
+            warehouse='transforming'
+        )
+
+       # logging.info("Initialized Snowflake connection to db=[%s], schema=[%s]", _connection.database,
+          #           _connection.schema)
+
+    return _connection
 
